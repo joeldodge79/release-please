@@ -51,11 +51,14 @@
     "nock": "^13.0.0",
     "sinon": "^9.0.3",
     "snap-shot-it": "^7.0.0",
+    "ts-node": "^9.1.1",
     "typescript": "^3.8.3"
   },
   "dependencies": {
     "@conventional-commits/parser": "^0.4.1",
     "@iarna/toml": "^2.2.5",
+    "@lerna/package": "^3.16.0",
+    "@lerna/package-graph": "^3.18.5",
     "@octokit/graphql": "^4.3.1",
     "@octokit/request": "^5.3.4",
     "@octokit/rest": "^18.0.4",
