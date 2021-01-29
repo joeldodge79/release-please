@@ -1,11 +1,13 @@
 {
   "extends": "./node_modules/gts/tsconfig-google.json",
   "compilerOptions": {
-    "noImplicitAny": false,
     "lib": ["es2018", "dom"],
     "rootDir": ".",
     "outDir": "build",
     "typeRoots": ["./typings", "./node_modules/@types"]
+  },
+  "ts-node": {
+    "files": true
   },
   "include": [
     "typings/**/*.d.ts",
