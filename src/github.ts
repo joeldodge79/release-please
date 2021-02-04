@@ -182,7 +182,7 @@ export class GitHub {
         baseUrl: this.apiUrl,
         headers: {
           'user-agent': `${RELEASE_PLEASE}/${
-            require('../../package.json').version
+            require('../package.json').version
           }`,
           Authorization: `token ${this.token}`,
         },
