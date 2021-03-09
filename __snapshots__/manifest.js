@@ -1,3 +1,78 @@
+exports['Manifest plugins runs the node-workspace plugin: changes'] = `
+
+filename: node/pkg1/CHANGELOG.md
+# Changelog
+
+### [0.123.5](https://www.github.com/fake/repo/compare/v0.123.4...v0.123.5) (1983-10-10)
+
+
+### Bug Fixes
+
+* **@node/pkg1:** bugfix pkg1 ([43e6f0d](https://www.github.com/fake/repo/commit/43e6f0d178468c33349fe3faac287d4c))
+
+filename: node/pkg1/package.json
+{
+  "name": "@node/pkg1",
+  "version": "0.123.5"
+}
+
+filename: python/CHANGELOG.md
+# Changelog
+
+### [1.2.4](https://www.github.com/fake/repo/compare/v1.2.3...v1.2.4) (1983-10-10)
+
+
+### Bug Fixes
+
+* **foolib:** bufix python foolib ([8df9117](https://www.github.com/fake/repo/commit/8df9117959264dc5b7b6c72ff36b8846))
+
+filename: python/setup.cfg
+version=1.2.4
+
+filename: python/setup.py
+version = "1.2.4"
+
+filename: python/src/foolib/version.py
+__version__ = "1.2.4"
+
+filename: node/pkg2/package.json
+{
+  "name": "@node/pkg2",
+  "version": "0.1.3",
+  "dependencies": {
+    "@node/pkg1": "^0.123.5"
+  }
+}
+
+filename: .release-please-manifest.json
+{
+  "node/pkg1": "0.123.5",
+  "node/pkg2": "0.1.3",
+  "python": "1.2.4"
+}
+
+`
+
+exports['Manifest plugins runs the node-workspace plugin: options'] = `
+
+upstreamOwner: fake
+upstreamRepo: repo
+title: chore: release
+branch: release-please/branches/main
+description: :robot: I have created a release \\*beep\\* \\*boop\\*
+---
+@node/pkg1: 0.123.5
+foolib: 1.2.4
+@node/pkg2: 0.1.3
+
+
+This PR was generated with [Release Please](https://github.com/googleapis/release-please). See [documentation](https://github.com/googleapis/release-please#release-please).
+primary: main
+force: true
+fork: false
+message: chore: release
+`
+
 exports['Manifest pullRequest boostraps from HEAD manifest if first PR: changes'] = `
 
 filename: node/pkg1/CHANGELOG.md
@@ -33,7 +108,10 @@ filename: node/pkg2/CHANGELOG.md
 filename: node/pkg2/package.json
 {
   "name": "@node/pkg2",
-  "version": "0.2.0"
+  "version": "0.2.0",
+  "dependencies": {
+    "@node/pkg1": "^0.123.4"
+  }
 }
 
 filename: python/CHANGELOG.md
@@ -119,7 +197,10 @@ filename: node/pkg2/CHANGELOG.md
 filename: node/pkg2/package.json
 {
   "name": "@node/pkg2",
-  "version": "0.2.0"
+  "version": "0.2.0",
+  "dependencies": {
+    "@node/pkg1": "^0.123.4"
+  }
 }
 
 filename: python/CHANGELOG.md
@@ -205,7 +286,10 @@ filename: node/pkg2/CHANGELOG.md
 filename: node/pkg2/package.json
 {
   "name": "@node/pkg2",
-  "version": "0.2.0"
+  "version": "0.2.0",
+  "dependencies": {
+    "@node/pkg1": "^0.123.4"
+  }
 }
 
 filename: python/CHANGELOG.md
@@ -291,7 +375,10 @@ filename: node/pkg2/CHANGELOG.md
 filename: node/pkg2/package.json
 {
   "name": "@node/pkg2",
-  "version": "0.2.0"
+  "version": "0.2.0",
+  "dependencies": {
+    "@node/pkg1": "^0.123.4"
+  }
 }
 
 filename: python/CHANGELOG.md
@@ -377,7 +464,10 @@ filename: node/pkg2/CHANGELOG.md
 filename: node/pkg2/package.json
 {
   "name": "@node/pkg2",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "dependencies": {
+    "@node/pkg1": "^0.123.4"
+  }
 }
 
 filename: python/CHANGELOG.md
@@ -511,7 +601,10 @@ filename: node/pkg2/CHANGELOG.md
 filename: node/pkg2/package.json
 {
   "name": "@node/pkg2",
-  "version": "0.2.0"
+  "version": "0.2.0",
+  "dependencies": {
+    "@node/pkg1": "^0.123.4"
+  }
 }
 
 filename: .release-please-manifest.json
@@ -580,7 +673,10 @@ filename: node/pkg2/CHANGELOG.md
 filename: node/pkg2/package.json
 {
   "name": "@node/pkg2",
-  "version": "0.3.0"
+  "version": "0.3.0",
+  "dependencies": {
+    "@node/pkg1": "^0.123.4"
+  }
 }
 
 filename: python/CHANGELOG.md

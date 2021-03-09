@@ -27,9 +27,8 @@ import {BranchName} from './util/branch-name';
 import {
   factory,
   ManifestConstructorOptions,
-  GitHubReleaseFactoryOptions,
-  ReleasePROptions,
-  GitHubReleaseOptions,
+  ManifestPackage,
+  ManifestPackageWithPRData,
 } from '.';
 import {ChangelogSection} from './conventional-commits';
 import {ReleasePleaseManifest} from './updaters/release-please-manifest';
@@ -41,6 +40,8 @@ import {
 } from './github-release';
 import {ReleasePR} from './release-pr';
 import {Changes} from 'code-suggester';
+import {getPlugin} from './plugins';
+import {ManifestPlugin} from './plugins/plugin';
 
 interface ReleaserConfigJson {
   'release-type'?: ReleaseType;
@@ -57,42 +58,15 @@ interface ReleaserPackageConfig extends ReleaserConfigJson {
 
 export interface Config extends ReleaserConfigJson {
   packages: Record<string, ReleaserPackageConfig>;
-  parsedPackages: Package[];
+  parsedPackages: ManifestPackage[];
   'bootstrap-sha'?: string;
+  plugins?: string[];
 }
-
-// allow list of releaser options used to build ReleasePR subclass instances
-// and GitHubRelease instances for each package. Rejected items:
-// 1. `monorepoTags` and `pullRequestTitlePattern` will never apply
-// 2. `lastPackageVersion` and `versionFile` could be supported if/when ruby
-//    support in the manifest is made available. However, ideally they'd be
-//    factored out of the ruby ReleasePR prior to adding support here.
-// 3. currently unsupported but possible future support:
-//   - `snapshot`
-//   - `label`
-type Package = Pick<
-  ReleasePROptions & GitHubReleaseOptions,
-  | 'draft'
-  | 'packageName'
-  | 'bumpMinorPreMajor'
-  | 'releaseAs'
-  | 'changelogSections'
-  | 'changelogPath'
-> & {
-  // these items are not optional in the manifest context.
-  path: string;
-  releaseType: ReleaseType;
-};
 
 interface PackageForReleaser {
-  config: Package;
+  config: ManifestPackage;
   commits: Commit[];
   lastVersion?: string;
-}
-
-interface PackageWithPRData {
-  config: Package;
-  prData: {version: string; changes: Changes};
 }
 
 type ManifestJson = Record<string, string>;
@@ -422,7 +396,7 @@ export class Manifest {
   }
 
   private async getReleasePR(
-    pkg: Package
+    pkg: ManifestPackage
   ): Promise<[ReleasePR, boolean | undefined]> {
     const {releaseType, draft, ...options} = pkg;
     const releaserOptions = {
@@ -440,7 +414,7 @@ export class Manifest {
   private async runReleasers(
     packagesForReleasers: PackageForReleaser[],
     sha?: string
-  ): Promise<[VersionsMap, PackageWithPRData[]]> {
+  ): Promise<[VersionsMap, ManifestPackageWithPRData[]]> {
     const newManifestVersions = new Map();
     const pkgsWithChanges = [];
     for (const pkg of packagesForReleasers) {
@@ -513,7 +487,7 @@ export class Manifest {
   private async buildManifestPR(
     newManifestVersions: VersionsMap,
     // using version, changes
-    packages: PackageWithPRData[]
+    packages: ManifestPackageWithPRData[]
   ): Promise<[string, Changes]> {
     let body = ':robot: I have created a release \\*beep\\* \\*boop\\*\n---\n';
     let changes = new Map();
@@ -538,6 +512,15 @@ export class Manifest {
     return this.gh.commitsSinceShaRest(fromSha);
   }
 
+  private async getPlugins(): Promise<ManifestPlugin[]> {
+    const plugins = [];
+    const config = await this.getConfigJson();
+    for (const p of config.plugins ?? []) {
+      plugins.push(await getPlugin(p, this.gh, config));
+    }
+    return plugins;
+  }
+
   async pullRequest(): Promise<number | undefined> {
     const valid = await this.validate();
     if (!valid) {
@@ -551,7 +534,7 @@ export class Manifest {
       commits,
       lastMergedPR?.sha
     );
-    const [newManifestVersions, pkgsWithChanges] = await this.runReleasers(
+    let [newManifestVersions, pkgsWithChanges] = await this.runReleasers(
       packagesForReleasers,
       lastMergedPR?.sha
     );
@@ -561,6 +544,13 @@ export class Manifest {
         CheckpointType.Success
       );
       return;
+    }
+
+    for (const plugin of await this.getPlugins()) {
+      [newManifestVersions, pkgsWithChanges] = await plugin.run(
+        newManifestVersions,
+        pkgsWithChanges
+      );
     }
 
     const [body, changes] = await this.buildManifestPR(
