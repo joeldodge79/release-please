@@ -14,7 +14,7 @@
 
 import {CommitSplit} from './commit-split';
 import {GitHub, GitHubFileContents, ReleaseCreateResponse} from './github';
-import {Update, VersionsMap} from './updaters/update';
+import {VersionsMap} from './updaters/update';
 import {ReleaseType} from './releasers';
 import {Commit} from './graphql-to-commits';
 import {
@@ -39,8 +39,8 @@ import {
   GitHubReleaseResponse,
   GITHUB_RELEASE_LABEL,
 } from './github-release';
-import {OpenPROptions} from './release-pr';
 import {ReleasePR} from './release-pr';
+import {Changes} from 'code-suggester';
 
 interface ReleaserConfigJson {
   'release-type'?: ReleaseType;
@@ -92,7 +92,7 @@ interface PackageForReleaser {
 
 interface PackageWithPRData {
   config: Package;
-  openPROptions: OpenPROptions;
+  prData: {version: string; changes: Changes};
 }
 
 type ManifestJson = Record<string, string>;
@@ -441,8 +441,8 @@ export class Manifest {
     packagesForReleasers: PackageForReleaser[],
     sha?: string
   ): Promise<[VersionsMap, PackageWithPRData[]]> {
-    const manifestUpdates = new Map();
-    const openPRPackages = [];
+    const newManifestVersions = new Map();
+    const pkgsWithChanges = [];
     for (const pkg of packagesForReleasers) {
       const [releasePR] = await this.getReleasePR(pkg.config);
       const pkgName = (await releasePR.getPackageName()).name;
@@ -470,30 +470,25 @@ export class Manifest {
       );
       if (openPROptions) {
         pkg.config.packageName = (await releasePR.getPackageName()).name;
-        openPRPackages.push({config: pkg.config, openPROptions});
-        manifestUpdates.set(pkg.config.path, openPROptions.version);
+        const changes = await this.gh.getChangeSet(
+          openPROptions.updates,
+          await this.gh.getDefaultBranch()
+        );
+        pkgsWithChanges.push({
+          config: pkg.config,
+          prData: {version: openPROptions.version, changes},
+        });
+        newManifestVersions.set(pkg.config.path, openPROptions.version);
       }
     }
-    return [manifestUpdates, openPRPackages];
+    return [newManifestVersions, pkgsWithChanges];
   }
 
-  private async buildManifestPR(
-    manifestUpdates: VersionsMap,
-    openPRPackages: PackageWithPRData[]
-  ): Promise<[string, Update[]]> {
-    let body = ':robot: I have created a release \\*beep\\* \\*boop\\*';
-    const updates: Update[] = [];
-    for (const openPRPackage of openPRPackages) {
-      body +=
-        '\n\n---\n' +
-        `${openPRPackage.config.packageName}: ${openPRPackage.openPROptions.version}\n` +
-        `${openPRPackage.openPROptions.changelogEntry}`;
-      updates.push(...openPRPackage.openPROptions.updates);
-    }
-
-    // TODO: `Update` interface to supply cached contents for use in
-    // GitHub.getChangeSet processing could be simplified to just use a
-    // string - no need for a full blown GitHubFileContents
+  private async getManifestChanges(
+    newManifestVersions: VersionsMap
+  ): Promise<Changes> {
+    // TODO: simplify `Update.contents?` to just be a string - no need to
+    // roundtrip through a GitHubFileContents
     const manifestContents: GitHubFileContents = {
       sha: '',
       parsedContent: '',
@@ -501,21 +496,38 @@ export class Manifest {
         JSON.stringify(await this.getManifestJson())
       ).toString('base64'),
     };
-    updates.push(
-      new ReleasePleaseManifest({
-        changelogEntry: '',
-        packageName: '',
-        path: this.manifestFileName,
-        version: '',
-        versions: manifestUpdates,
-        contents: manifestContents,
-      })
+    const manifestUpdate = new ReleasePleaseManifest({
+      changelogEntry: '',
+      packageName: '',
+      path: this.manifestFileName,
+      version: '',
+      versions: newManifestVersions,
+      contents: manifestContents,
+    });
+    return await this.gh.getChangeSet(
+      [manifestUpdate],
+      await this.gh.getDefaultBranch()
     );
+  }
+
+  private async buildManifestPR(
+    newManifestVersions: VersionsMap,
+    // using version, changes
+    packages: PackageWithPRData[]
+  ): Promise<[string, Changes]> {
+    let body = ':robot: I have created a release \\*beep\\* \\*boop\\*\n---\n';
+    let changes = new Map();
+    for (const pkg of packages) {
+      body += `${pkg.config.packageName}: ${pkg.prData.version}\n`;
+      changes = new Map([...changes, ...pkg.prData.changes]);
+    }
+    const manifestChanges = await this.getManifestChanges(newManifestVersions);
+    changes = new Map([...changes, ...manifestChanges]);
     body +=
       '\n\nThis PR was generated with [Release Please]' +
       `(https://github.com/googleapis/${RELEASE_PLEASE}). See [documentation]` +
       `(https://github.com/googleapis/${RELEASE_PLEASE}#${RELEASE_PLEASE}).`;
-    return [body, updates];
+    return [body, changes];
   }
 
   private async commitsSinceSha(sha?: string): Promise<Commit[]> {
@@ -539,11 +551,11 @@ export class Manifest {
       commits,
       lastMergedPR?.sha
     );
-    const [manifestUpdates, openPRPackages] = await this.runReleasers(
+    const [newManifestVersions, pkgsWithChanges] = await this.runReleasers(
       packagesForReleasers,
       lastMergedPR?.sha
     );
-    if (openPRPackages.length === 0) {
+    if (pkgsWithChanges.length === 0) {
       this.checkpoint(
         'No user facing changes to release',
         CheckpointType.Success
@@ -551,16 +563,17 @@ export class Manifest {
       return;
     }
 
-    const [body, updates] = await this.buildManifestPR(
-      manifestUpdates,
-      openPRPackages
+    const [body, changes] = await this.buildManifestPR(
+      newManifestVersions,
+      pkgsWithChanges
     );
     const pr = await this.gh.openPR({
       branch: branchName,
       title: 'chore: release',
       body: body,
-      updates,
+      updates: [],
       labels: DEFAULT_LABELS,
+      changes,
     });
     if (pr) {
       await this.gh.addLabels(DEFAULT_LABELS, pr);

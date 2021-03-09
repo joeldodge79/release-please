@@ -112,6 +112,7 @@ export interface GitHubPR {
   body: string;
   updates: Update[];
   labels: string[];
+  changes?: Changes;
 }
 
 export interface MergedGitHubPR {
@@ -1167,8 +1168,10 @@ export class GitHub {
       return undefined;
     }
 
-    //  Actually update the files for the release:
-    const changes = await this.getChangeSet(options.updates, defaultBranch);
+    //  Update the files for the release if not already supplied
+    const changes =
+      options.changes ??
+      (await this.getChangeSet(options.updates, defaultBranch));
     const prNumber = await createPullRequest(
       this.octokit,
       changes,
@@ -1208,7 +1211,7 @@ export class GitHub {
     }
   }
 
-  private async getChangeSet(
+  async getChangeSet(
     updates: Update[],
     defaultBranch: string
   ): Promise<Changes> {
